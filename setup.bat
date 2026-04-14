@@ -1,45 +1,36 @@
 @echo off
-chcp 65001 > nul
 echo ============================================
-echo   Catawiki ボット セットアップ
+echo   Catawiki Bot - Setup
 echo ============================================
 echo.
 
-REM --- Python の確認 ---
 python --version > nul 2>&1
 if %errorlevel% neq 0 (
-    echo [!] Python がインストールされていません。
-    echo     自動でダウンロードします...
+    echo [!] Python is not installed.
+    echo     Please install Python from https://www.python.org/downloads/
+    echo     Make sure to check "Add Python to PATH" during installation!
     echo.
-    powershell -Command "Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.12.3/python-3.12.3-amd64.exe' -OutFile 'python_installer.exe'"
-    echo [*] インストール中...
-    python_installer.exe /quiet InstallAllUsers=0 PrependPath=1 Include_test=0
-    del python_installer.exe
-    echo.
-    echo [!] インストール完了。このウィンドウを閉じて setup.bat をもう一度ダブルクリックしてください。
     pause
     exit /b
 )
 
-echo [OK] Python が見つかりました
+echo [OK] Python found.
 echo.
-
-REM --- pip パッケージのインストール ---
-echo [*] 必要なライブラリをインストール中...
+echo [*] Installing required libraries...
 python -m pip install --upgrade pip --quiet
 python -m pip install playwright --quiet
 
-echo [*] ブラウザをインストール中（少し時間がかかります）...
+echo [*] Installing browser (this may take a few minutes)...
 python -m playwright install chromium
 
 echo.
 echo ============================================
-echo   セットアップ完了！
+echo   Setup complete!
 echo ============================================
 echo.
-echo 次のステップ:
-echo   1. config.json をメモ帳で開く
-echo   2. メールアドレスとパスワードを入力して保存
-echo   3. 起動.bat をダブルクリックしてボットを起動
+echo Next steps:
+echo   1. Open config.json with Notepad
+echo   2. Enter your Catawiki email and password
+echo   3. Double-click "start.bat" to launch the bot
 echo.
 pause

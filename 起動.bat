@@ -1,13 +1,12 @@
 @echo off
-chcp 65001 > nul
 echo ============================================
-echo   Catawiki 自動化ボット 起動中...
+echo   Catawiki Bot - Starting...
 echo ============================================
 echo.
 
 python --version > nul 2>&1
 if %errorlevel% neq 0 (
-    echo [!] Python が見つかりません。先に setup.bat を実行してください。
+    echo [!] Python not found. Please run setup.bat first.
     pause
     exit /b
 )
@@ -15,8 +14,7 @@ if %errorlevel% neq 0 (
 python bot.py
 if %errorlevel% neq 0 (
     echo.
-    echo [!] エラーが発生しました。
-    echo     setup.bat を実行してライブラリをインストールしてください。
+    echo [!] An error occurred. Please run setup.bat first.
 )
 
 pause
