@@ -443,23 +443,24 @@ async def main():
     config["password"] = password
 
     # Start ngrok tunnel
-    print("Starting ngrok tunnel...")
+    print("ngrokトンネルを起動中...")
     try:
         from pyngrok import ngrok, conf
         conf.get_default().auth_token = config["ngrok_auth_token"]
-        tunnel = ngrok.connect(WEBHOOK_PORT, "http")
+        domain = config.get("ngrok_domain", "").strip()
+        if domain:
+            tunnel = ngrok.connect(WEBHOOK_PORT, "http", hostname=domain)
+        else:
+            tunnel = ngrok.connect(WEBHOOK_PORT, "http")
         webhook_url = f"{tunnel.public_url}/webhook"
-        print(f"Public URL: {webhook_url}")
+        print(f"Webhook URL: {webhook_url}")
     except Exception as e:
-        print(f"ngrok error: {e}")
-        print("Make sure pyngrok is installed and your ngrok auth token is correct.")
-        input("Press Enter to exit...")
+        print(f"ngrokエラー: {e}")
+        print("pyngrokがインストールされているか、ngrok認証トークンが正しいか確認してください。")
+        input("Enterキーを押して終了...")
         sys.exit(1)
 
-    # Configure LINE webhook
-    print("Setting LINE webhook...")
-    print(f"Webhook URL: {webhook_url}")
-    print("(LINE Developersコンソールの「Messaging API」→「Webhook URL」に上記URLを貼り付けてください)")
+    # Configure LINE webhook (automatic)
     await set_line_webhook(config["line_token"], webhook_url)
 
     # Start local webhook server
@@ -486,16 +487,9 @@ async def main():
             input("Press Enter to exit...")
             return
 
-        print("Login successful. Bot is running in the background.")
-        await line_send(
-            config["line_token"], config["line_user_id"],
-            f"Catawikiボット起動しました！\n\n"
-            f"【Webhook URL】\n{webhook_url}\n\n"
-            f"初回のみ：LINE Developersコンソールの\n"
-            f"「Messaging API」→「Webhook URL」に\n"
-            f"上記URLを貼り付けて「更新」→「検証」をクリックしてください。\n\n"
-            f"設定済みの場合はこのメッセージを無視してください。"
-        )
+        print("ログイン成功。ボットはバックグラウンドで動作中。")
+        await line_send(config["line_token"], config["line_user_id"],
+                        "Catawikiボット起動しました！\n新着メッセージが届いたらここに通知します。")
 
         await asyncio.gather(
             check_catawiki_loop(config),
