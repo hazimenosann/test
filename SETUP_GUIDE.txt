@@ -1,81 +1,88 @@
 ============================================================
-  Catawiki AI Bot - Setup Guide
+  Catawiki AIボット - セットアップガイド
 ============================================================
 
-This bot will:
-  - Check Catawiki for new messages every 5 minutes
-  - Generate a human-like AI reply
-  - Send you a LINE notification with the message + reply suggestion
-  - Send the reply to Catawiki when you tap "Send reply" in LINE
+このボットは以下のことを自動で行います：
+  - 5分ごとにCatawikiの新着メッセージを確認
+  - AIが人間らしい返信案を自動生成
+  - LINEにメッセージと返信案を日本語で通知
+  - LINEで「返信を送る」をタップするとCatawikiに送信
+  - 日本語で返信を入力すると自動翻訳して送信
 
-You need to fill in 5 values in config.json.
-Here is how to get each one:
-
-------------------------------------------------------------
-1. Catawiki email
-------------------------------------------------------------
-Your Catawiki login email address.
-Example: "email": "yourname@gmail.com"
+config.json に5つの値を入力する必要があります。
+それぞれの取得方法を以下に説明します。
 
 
 ------------------------------------------------------------
-2. Anthropic API key (for AI replies)
+1. Catawiki のメールアドレス
 ------------------------------------------------------------
-1. Go to https://console.anthropic.com/
-2. Sign up for a free account
-3. Click "API Keys" in the left menu
-4. Click "Create Key"
-5. Copy the key (starts with sk-ant-)
-6. Paste it into config.json
-
-Cost: very low. About $0.01-0.05 per month for 2-3 watches.
+Catawiki にログインするときのメールアドレスを入力します。
+例: "email": "yourname@gmail.com"
 
 
 ------------------------------------------------------------
-3. LINE Channel Access Token
+2. Anthropic API キー（AI返信に使用）
 ------------------------------------------------------------
-1. Go to https://developers.line.biz/
-2. Log in with your LINE account
-3. Click "Create a new provider" and give it any name
-4. Click "Create a Messaging API channel"
-5. Fill in the required fields (channel name, description, etc.)
-6. After creation, go to the "Messaging API" tab
-7. Scroll down to "Channel access token"
-8. Click "Issue" to generate a token
-9. Copy the long token and paste it into config.json
+1. https://console.anthropic.com/ にアクセス
+2. アカウントを作成（無料）
+3. 左メニューの「API Keys」をクリック
+4. 「Create Key」をクリック
+5. 表示されたキーをコピー（sk-ant- から始まる）
+6. config.json に貼り付け
 
-Example: "line_token": "abc123xyz..."
+費用の目安：月に時計を2〜3本販売する程度なら月額約1〜5円程度。
 
 
 ------------------------------------------------------------
-4. LINE User ID
+3. LINE チャンネルアクセストークン
 ------------------------------------------------------------
-This is YOUR personal LINE user ID (not the bot's ID).
+1. https://developers.line.biz/ にアクセス
+2. LINEアカウントでログイン
+3. 「新規プロバイダー作成」をクリックし、任意の名前を入力
+4. 「Messaging API チャンネルを作成」をクリック
+5. 必要項目（チャンネル名、説明など）を入力
+6. 作成後、「Messaging API」タブを開く
+7. 下にスクロールして「チャンネルアクセストークン」を探す
+8. 「発行」ボタンをクリックしてトークンを生成
+9. 表示された長いトークンをコピーして config.json に貼り付け
 
-1. In the LINE Developers console, click on your channel
-2. Click "Basic settings" tab
-3. Scroll down to "Your user ID"
-4. It looks like: U1234567890abcdef1234567890abcdef
-5. Copy it and paste into config.json
-
-Example: "line_user_id": "Uabcdef1234567890"
-
-
-------------------------------------------------------------
-5. ngrok auth token (creates a public URL for LINE webhooks)
-------------------------------------------------------------
-1. Go to https://ngrok.com/
-2. Sign up for a free account
-3. After logging in, go to "Your Authtoken" on the dashboard
-4. Copy the token and paste it into config.json
-
-Example: "ngrok_auth_token": "2abc123..."
-
-Note: ngrok is free. Your PC needs to be on for the bot to work.
+例: "line_token": "abc123xyz..."
 
 
 ------------------------------------------------------------
-  Final config.json should look like this:
+4. LINE ユーザーID
+------------------------------------------------------------
+これはボットのIDではなく、あなた自身のLINEユーザーIDです。
+
+1. LINE Developersコンソールで作成したチャンネルを開く
+2. 「基本設定」タブをクリック
+3. 下にスクロールして「あなたのユーザーID」を探す
+4. U から始まる文字列が表示される
+   例: U1234567890abcdef1234567890abcdef
+5. コピーして config.json に貼り付け
+
+例: "line_user_id": "Uabcdef1234567890"
+
+
+------------------------------------------------------------
+5. ngrok 認証トークン（LINEのWebhook用公開URLを作成）
+------------------------------------------------------------
+ngrok とは、自宅のPCに外部からアクセスできるURLを一時的に
+作成するサービスです。LINEがあなたのPCにメッセージを届けるために
+必要です（無料で使えます）。
+
+1. https://ngrok.com/ にアクセス
+2. アカウントを作成（無料）
+3. ログイン後、ダッシュボードの「Your Authtoken」を開く
+4. トークンをコピーして config.json に貼り付け
+
+例: "ngrok_auth_token": "2abc123..."
+
+注意：ボット動作中はPCの電源を入れたままにしてください。
+
+
+------------------------------------------------------------
+  最終的な config.json の内容（例）
 ------------------------------------------------------------
 {
   "email": "yourname@gmail.com",
@@ -87,19 +94,19 @@ Note: ngrok is free. Your PC needs to be on for the bot to work.
 
 
 ------------------------------------------------------------
-  One more LINE setting required after first launch:
+  初回起動後に必要なLINEの設定
 ------------------------------------------------------------
-After running the bot for the first time, you need to
-enable the webhook in LINE Developers console:
+ボットを初めて起動した後、LINE DevelopersコンソールでWebhookを
+有効にする必要があります。
 
-1. Go to your channel in LINE Developers console
-2. Click "Messaging API" tab
-3. Under "Webhook settings", turn ON "Use webhook"
-4. Click "Verify" to confirm it works
+1. LINE Developersコンソールでチャンネルを開く
+2. 「Messaging API」タブをクリック
+3. 「Webhook設定」の「Webhookの利用」をオンにする
+4. 「検証」をクリックして正常に動作するか確認
 
-Also, add your LINE bot as a friend:
-1. Go to "Messaging API" tab
-2. Find the QR code under "Bot information"
-3. Scan it with your LINE app to add the bot as a friend
+また、LINEボットを友だちに追加する必要があります：
+1. 「Messaging API」タブを開く
+2. 「ボット情報」のQRコードを探す
+3. スマートフォンのLINEアプリでQRコードをスキャンして友だち追加
 
 ============================================================
