@@ -458,6 +458,8 @@ async def main():
 
     # Configure LINE webhook
     print("Setting LINE webhook...")
+    print(f"Webhook URL: {webhook_url}")
+    print("(LINE Developersコンソールの「Messaging API」→「Webhook URL」に上記URLを貼り付けてください)")
     await set_line_webhook(config["line_token"], webhook_url)
 
     # Start local webhook server
@@ -485,8 +487,15 @@ async def main():
             return
 
         print("Login successful. Bot is running in the background.")
-        await line_send(config["line_token"], config["line_user_id"],
-                        "Catawiki bot started! You will be notified of new messages here.")
+        await line_send(
+            config["line_token"], config["line_user_id"],
+            f"Catawikiボット起動しました！\n\n"
+            f"【Webhook URL】\n{webhook_url}\n\n"
+            f"初回のみ：LINE Developersコンソールの\n"
+            f"「Messaging API」→「Webhook URL」に\n"
+            f"上記URLを貼り付けて「更新」→「検証」をクリックしてください。\n\n"
+            f"設定済みの場合はこのメッセージを無視してください。"
+        )
 
         await asyncio.gather(
             check_catawiki_loop(config),
