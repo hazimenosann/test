@@ -448,6 +448,14 @@ async def main():
         sys.exit(0)
     config["password"] = password
 
+    # Start local webhook server FIRST (before registering with LINE)
+    app = web.Application()
+    app.router.add_post("/webhook", handle_webhook)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    await web.TCPSite(runner, "0.0.0.0", WEBHOOK_PORT).start()
+    print(f"Webhookサーバー起動完了 (port {WEBHOOK_PORT})")
+
     # Start ngrok tunnel
     print("ngrokトンネルを起動中...")
     try:
@@ -468,14 +476,6 @@ async def main():
 
     # Configure LINE webhook (automatic)
     await set_line_webhook(config["line_token"], webhook_url)
-
-    # Start local webhook server
-    app = web.Application()
-    app.router.add_post("/webhook", handle_webhook)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    await web.TCPSite(runner, "localhost", WEBHOOK_PORT).start()
-    print(f"Webhook server running on port {WEBHOOK_PORT}")
 
     # Start browser
     BROWSER_DATA.mkdir(exist_ok=True)
