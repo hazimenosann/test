@@ -558,14 +558,34 @@ async def main():
     # Configure LINE webhook (automatic)
     await set_line_webhook(config["line_token"], webhook_url)
 
-    # Start browser
+    # Start browser with stealth settings to avoid bot detection (Akamai)
     BROWSER_DATA.mkdir(exist_ok=True)
     async with async_playwright() as p:
         ctx = await p.chromium.launch_persistent_context(
             user_data_dir=str(BROWSER_DATA),
-            headless=True,   # run in background (no visible browser window)
-            args=["--no-sandbox"],
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-dev-shm-usage",
+                "--disable-infobars",
+                "--window-size=1280,800",
+            ],
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36"
+            ),
+            viewport={"width": 1280, "height": 800},
+            locale="nl-NL",
         )
+        # Hide webdriver flag on every page before it loads
+        await ctx.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            window.chrome = {runtime: {}};
+            Object.defineProperty(navigator, 'plugins',   {get: () => [1, 2, 3, 4, 5]});
+            Object.defineProperty(navigator, 'languages', {get: () => ['nl-NL', 'nl', 'en-US', 'en']});
+        """)
         browser_page = ctx.pages[0] if ctx.pages else await ctx.new_page()
 
         ok = await ensure_logged_in(browser_page, config)
