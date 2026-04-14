@@ -1,4 +1,5 @@
 import asyncio
+import getpass
 import json
 import sys
 from pathlib import Path
@@ -62,7 +63,7 @@ async def ensure_logged_in(page, config):
         return False
 
     if "/login" in page.url:
-        print("❌ ログイン失敗 — config.json のメールとパスワードを確認してください")
+        print("❌ ログイン失敗 — メールアドレスまたはパスワードを確認してください")
         return False
 
     print("✅ ログイン成功！")
@@ -256,7 +257,14 @@ async def main():
     templates = load_json(TEMPLATE_FILE)
 
     if config["email"].startswith("ここに"):
-        print("❌ config.json にメールアドレスとパスワードを入力してください")
+        print("❌ config.json にメールアドレスを入力してください")
+        input("Enterで終了...")
+        sys.exit(1)
+
+    print("Catawiki password: ", end="", flush=True)
+    config["password"] = getpass.getpass("")
+    if not config["password"]:
+        print("❌ パスワードが入力されていません")
         input("Enterで終了...")
         sys.exit(1)
 
