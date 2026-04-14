@@ -253,13 +253,34 @@ async def main():
             input("Enterで終了...")
             sys.exit(1)
 
-    config    = load_json(CONFIG_FILE)
+    try:
+        config = load_json(CONFIG_FILE)
+    except Exception:
+        print("❌ config.json の読み込みに失敗しました。")
+        print("   config.json をメモ帳で開いて内容を確認してください。")
+        print()
+        print('   正しい形式の例:')
+        print('   {')
+        print('     "email": "your@email.com",')
+        print('     "default_language": "en"')
+        print('   }')
+        input("\nEnterで終了...")
+        sys.exit(1)
+
     templates = load_json(TEMPLATE_FILE)
 
-    if config["email"].startswith("ここに"):
-        print("❌ config.json にメールアドレスを入力してください")
-        input("Enterで終了...")
+    email = config.get("email", "")
+    if not email or email.startswith("ここに"):
+        print("❌ config.json にメールアドレスが設定されていません。")
+        print()
+        print("   config.json をメモ帳で開いて、")
+        print('   "email": の部分にCatawikiのメールアドレスを入力してください。')
+        print()
+        print('   例: "email": "your@email.com"')
+        input("\nEnterで終了...")
         sys.exit(1)
+
+    config["email"] = email
 
     print("Catawiki password: ", end="", flush=True)
     config["password"] = getpass.getpass("")
