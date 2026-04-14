@@ -168,11 +168,17 @@ async def set_line_webhook(token: str, url: str):
             "https://api.line.me/v1/webhook/endpoint",
             headers={"Authorization": f"Bearer {token}",
                      "Content-Type": "application/json"},
-            json={"webhook_endpoint": url},
+            json={"webhookEndpoint": url},
         )
-        if r.status != 200:
+        if r.status == 200:
+            print("[LINE] Webhook URL を自動設定しました。")
+        else:
             body = await r.text()
-            print(f"[LINE] webhook set failed ({r.status}): {body}")
+            print(f"[LINE] Webhook URL の自動設定に失敗しました ({r.status}): {body}")
+            print(f"[LINE] 手動で設定してください：")
+            print(f"  LINE Developersコンソール → Messaging API → Webhook URL")
+            print(f"  に以下を貼り付けて「更新」→「検証」:")
+            print(f"  {url}")
 
 # ── LINE webhook server ───────────────────────────────────────────────────────
 async def handle_webhook(request: web.Request) -> web.Response:
