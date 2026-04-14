@@ -85,13 +85,18 @@ ngrok とは、自宅のPCに外部からアクセスできるURLを作成する
 LINEのWebhook URLが変わらないため、一度設定するだけで完了します。
 
 取得方法：
-1. https://ngrok.com/ にログイン
-2. 左メニューの「Domains」をクリック
-3. 「+ New Domain」または「Claim your free domain」をクリック
+1. ブラウザで以下のURLに直接アクセス：
+   https://dashboard.ngrok.com/domains
+2. 「+ New Domain」ボタンをクリック
+3. 「Free」または「Static Domain」を選択
 4. 自動生成されたドメインをコピー
    例: certain-fox-honestly.ngrok-free.app
 5. config.json の "ngrok_domain" に貼り付け
    （https:// は不要。ドメイン名だけ入力）
+
+※ 上記ページを開いてもドメインが作れない場合：
+   ページ上部に「Upgrade」案内がある → 無料プランで1つだけ作れます。
+   すでにドメインが表示されている → それをそのままコピーして使ってください。
 
 例: "ngrok_domain": "certain-fox-honestly.ngrok-free.app"
 
