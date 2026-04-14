@@ -1,7 +1,8 @@
 import asyncio
-import getpass
 import json
 import sys
+import tkinter as tk
+from tkinter import simpledialog, messagebox
 from pathlib import Path
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 
@@ -282,11 +283,22 @@ async def main():
 
     config["email"] = email
 
-    print("Catawiki password: ", end="", flush=True)
-    config["password"] = getpass.getpass("")
-    if not config["password"]:
-        print("❌ パスワードが入力されていません")
-        input("Enterで終了...")
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    password = simpledialog.askstring(
+        "Catawiki Login",
+        "Catawikiのパスワードを入力してください:",
+        show="*",
+        parent=root
+    )
+    root.destroy()
+
+    if not password:
+        messagebox.showerror("エラー", "パスワードが入力されませんでした。")
+        sys.exit(1)
+
+    config["password"] = password
         sys.exit(1)
 
     BROWSER_DATA.mkdir(exist_ok=True)
