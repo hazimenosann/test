@@ -180,21 +180,12 @@ async def line_send(token: str, user_id: str, text: str, buttons: bool = False):
             log.warning(f"[LINE送信失敗] status={r.status} {body}")
 
 async def set_line_webhook(token: str, url: str):
-    async with aiohttp.ClientSession() as s:
-        r = await s.put(
-            "https://api.line.me/v1/webhook/endpoint",
-            headers={"Authorization": f"Bearer {token}",
-                     "Content-Type": "application/json"},
-            json={"webhookEndpoint": url},
-        )
-        if r.status == 200:
-            log.info("[LINE] Webhook URL を自動設定しました。")
-        else:
-            body = await r.text()
-            log.warning(f"[LINE] Webhook URL の自動設定に失敗しました ({r.status}): {body}")
-            log.warning(f"[LINE] 手動で設定してください：")
-            log.warning(f"  LINE Developersコンソール → Messaging API → Webhook URL")
-            log.warning(f"  に以下を貼り付けて「更新」→「検証」: {url}")
+    # Webhook URL registration must be done manually in LINE Developers Console.
+    # Log the URL clearly so the user can copy it.
+    log.info(f"[LINE] Webhook URL: {url}")
+    log.info("[LINE] 初回のみ手動設定が必要です：")
+    log.info("[LINE]   LINE Developersコンソール → Messaging API → Webhook URL")
+    log.info(f"[LINE]   に上記URLを貼り付けて「更新」→「検証」")
 
 # ── LINE webhook server ───────────────────────────────────────────────────────
 async def handle_webhook(request: web.Request) -> web.Response:
@@ -240,13 +231,34 @@ REPLY_SEL = 'textarea[name="message"], textarea[placeholder], .reply-box textare
 SEND_SEL  = ('button[type="submit"], .send-button, '
              'button:has-text("Send"), button:has-text("Verstuur")')
 
+async def _dismiss_cookie_banner(page):
+    """クッキー同意バナーを閉じる（なければ何もしない）"""
+    COOKIE_SEL = (
+        'button[id*="accept"], button[class*="accept-all"], '
+        'button[data-testid*="cookie"], button[aria-label*="cookie"], '
+        'button:has-text("Accept all"), button:has-text("Accept cookies"), '
+        'button:has-text("Alle cookies accepteren"), '
+        'button:has-text("Accepteer"), button:has-text("Akkoord"), '
+        '[id*="onetrust-accept"], [id*="cookie-accept"]'
+    )
+    try:
+        btn = await page.wait_for_selector(COOKIE_SEL, timeout=5000)
+        if btn:
+            await btn.click()
+            log.info("[Catawiki] クッキー同意バナーを閉じました")
+            await page.wait_for_timeout(1000)
+    except PlaywrightTimeoutError:
+        pass  # バナーなし
+
 async def ensure_logged_in(page, config) -> bool:
     log.info("[Catawiki] ログイン状態を確認中...")
     await page.goto("https://www.catawiki.com",
                     wait_until="domcontentloaded", timeout=30000)
+    await _dismiss_cookie_banner(page)
     try:
         await page.wait_for_selector(
-            '[data-testid="header-account"], .header-account', timeout=5000)
+            '[data-testid="header-account"], .header-account, '
+            'a[href*="/logout"], [data-testid="user-menu"]', timeout=5000)
         log.info("[Catawiki] セッション維持中（再ログイン不要）")
         return True
     except PlaywrightTimeoutError:
@@ -255,17 +267,35 @@ async def ensure_logged_in(page, config) -> bool:
     log.info("[Catawiki] ログインページへ移動中...")
     await page.goto("https://www.catawiki.com/login",
                     wait_until="networkidle", timeout=30000)
+    await _dismiss_cookie_banner(page)
+    await page.screenshot(path="debug_before_login.png")
+
     try:
-        await page.fill('input[type="email"]',    config["email"],    timeout=10000)
-        await page.fill('input[type="password"]', config["password"], timeout=10000)
-        await page.click('button[type="submit"]', timeout=10000)
+        EMAIL_SEL = 'input[type="email"], input[name="email"], input[id*="email"]'
+        PASS_SEL  = 'input[type="password"], input[name="password"]'
+        SUBMIT_SEL = 'button[type="submit"]'
+
+        log.info("[Catawiki] メールアドレスを入力中...")
+        await page.wait_for_selector(EMAIL_SEL, timeout=15000)
+        await page.fill(EMAIL_SEL, config["email"])
+
+        log.info("[Catawiki] パスワードを入力中...")
+        await page.wait_for_selector(PASS_SEL, timeout=10000)
+        await page.fill(PASS_SEL, config["password"])
+
+        log.info("[Catawiki] ログインボタンをクリック...")
+        await page.click(SUBMIT_SEL, timeout=10000)
         await page.wait_for_load_state("networkidle", timeout=30000)
     except Exception as e:
-        await page.screenshot(path="debug_login.png")
+        await page.screenshot(path="debug_login_failed.png")
         log.error(f"[Catawiki] ログイン失敗: {e}")
+        log.error("[Catawiki] スクリーンショット: debug_login_failed.png を確認してください")
         return False
+
     result = "/login" not in page.url
     log.info(f"[Catawiki] ログイン{'成功' if result else '失敗'} URL={page.url}")
+    if not result:
+        await page.screenshot(path="debug_login_failed.png")
     return result
 
 async def fetch_threads(page) -> list:
