@@ -404,9 +404,24 @@ async def main():
 
     try:
         config = load_json(CONFIG_FILE)
-    except Exception:
-        print("Failed to read config.json.")
-        input("Press Enter to exit...")
+    except Exception as e:
+        print("config.json の読み込みに失敗しました。")
+        print(f"エラー内容: {e}")
+        print()
+        print("よくある原因：")
+        print("  - 値を入力したあとダブルクォーテーション(\")が消えている")
+        print("  - 最後の項目の後にカンマ(,)が残っている")
+        print("  - ファイルが正しく保存されていない")
+        print()
+        print("config.json の正しい書き方の例：")
+        print('{')
+        print('  "email": "yourname@gmail.com",')
+        print('  "anthropic_api_key": "sk-ant-abc123...",')
+        print('  "line_token": "XYZ123...",')
+        print('  "line_user_id": "U1234567890abcdef",')
+        print('  "ngrok_auth_token": "2abc123..."')
+        print('}')
+        input("\nEnterキーを押して終了...")
         sys.exit(1)
 
     for key in ["email", "anthropic_api_key", "line_token", "line_user_id", "ngrok_auth_token"]:
