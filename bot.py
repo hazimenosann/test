@@ -558,17 +558,19 @@ async def main():
     # Configure LINE webhook (automatic)
     await set_line_webhook(config["line_token"], webhook_url)
 
-    # Start browser with stealth settings to avoid bot detection (Akamai)
+    # Start browser — use the real Chrome installation to bypass Akamai bot detection.
+    # Headless Chromium is fingerprinted and blocked; real Chrome is not.
+    # The window is positioned off-screen so it stays invisible.
     BROWSER_DATA.mkdir(exist_ok=True)
     async with async_playwright() as p:
-        ctx = await p.chromium.launch_persistent_context(
+        launch_kwargs = dict(
             user_data_dir=str(BROWSER_DATA),
-            headless=True,
+            headless=False,
             args=[
                 "--no-sandbox",
                 "--disable-blink-features=AutomationControlled",
-                "--disable-dev-shm-usage",
                 "--disable-infobars",
+                "--window-position=-32000,0",   # move off-screen (invisible)
                 "--window-size=1280,800",
             ],
             user_agent=(
@@ -579,7 +581,15 @@ async def main():
             viewport={"width": 1280, "height": 800},
             locale="nl-NL",
         )
-        # Hide webdriver flag on every page before it loads
+        try:
+            ctx = await p.chromium.launch_persistent_context(
+                channel="chrome", **launch_kwargs)
+            log.info("ブラウザ: システムのChrome を使用")
+        except Exception:
+            log.warning("Chrome が見つかりません。Chromium にフォールバックします。")
+            ctx = await p.chromium.launch_persistent_context(**launch_kwargs)
+
+        # Hide remaining automation markers
         await ctx.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
             window.chrome = {runtime: {}};
