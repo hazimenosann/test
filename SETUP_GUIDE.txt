@@ -1,0 +1,105 @@
+============================================================
+  Catawiki AI Bot - Setup Guide
+============================================================
+
+This bot will:
+  - Check Catawiki for new messages every 5 minutes
+  - Generate a human-like AI reply
+  - Send you a LINE notification with the message + reply suggestion
+  - Send the reply to Catawiki when you tap "Send reply" in LINE
+
+You need to fill in 5 values in config.json.
+Here is how to get each one:
+
+------------------------------------------------------------
+1. Catawiki email
+------------------------------------------------------------
+Your Catawiki login email address.
+Example: "email": "yourname@gmail.com"
+
+
+------------------------------------------------------------
+2. Anthropic API key (for AI replies)
+------------------------------------------------------------
+1. Go to https://console.anthropic.com/
+2. Sign up for a free account
+3. Click "API Keys" in the left menu
+4. Click "Create Key"
+5. Copy the key (starts with sk-ant-)
+6. Paste it into config.json
+
+Cost: very low. About $0.01-0.05 per month for 2-3 watches.
+
+
+------------------------------------------------------------
+3. LINE Channel Access Token
+------------------------------------------------------------
+1. Go to https://developers.line.biz/
+2. Log in with your LINE account
+3. Click "Create a new provider" and give it any name
+4. Click "Create a Messaging API channel"
+5. Fill in the required fields (channel name, description, etc.)
+6. After creation, go to the "Messaging API" tab
+7. Scroll down to "Channel access token"
+8. Click "Issue" to generate a token
+9. Copy the long token and paste it into config.json
+
+Example: "line_token": "abc123xyz..."
+
+
+------------------------------------------------------------
+4. LINE User ID
+------------------------------------------------------------
+This is YOUR personal LINE user ID (not the bot's ID).
+
+1. In the LINE Developers console, click on your channel
+2. Click "Basic settings" tab
+3. Scroll down to "Your user ID"
+4. It looks like: U1234567890abcdef1234567890abcdef
+5. Copy it and paste into config.json
+
+Example: "line_user_id": "Uabcdef1234567890"
+
+
+------------------------------------------------------------
+5. ngrok auth token (creates a public URL for LINE webhooks)
+------------------------------------------------------------
+1. Go to https://ngrok.com/
+2. Sign up for a free account
+3. After logging in, go to "Your Authtoken" on the dashboard
+4. Copy the token and paste it into config.json
+
+Example: "ngrok_auth_token": "2abc123..."
+
+Note: ngrok is free. Your PC needs to be on for the bot to work.
+
+
+------------------------------------------------------------
+  Final config.json should look like this:
+------------------------------------------------------------
+{
+  "email": "yourname@gmail.com",
+  "anthropic_api_key": "sk-ant-abc123...",
+  "line_token": "XYZ123longtoken...",
+  "line_user_id": "U1234567890abcdef",
+  "ngrok_auth_token": "2abc123yourtokenhere"
+}
+
+
+------------------------------------------------------------
+  One more LINE setting required after first launch:
+------------------------------------------------------------
+After running the bot for the first time, you need to
+enable the webhook in LINE Developers console:
+
+1. Go to your channel in LINE Developers console
+2. Click "Messaging API" tab
+3. Under "Webhook settings", turn ON "Use webhook"
+4. Click "Verify" to confirm it works
+
+Also, add your LINE bot as a friend:
+1. Go to "Messaging API" tab
+2. Find the QR code under "Bot information"
+3. Scan it with your LINE app to add the bot as a friend
+
+============================================================

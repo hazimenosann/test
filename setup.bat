@@ -18,7 +18,7 @@ echo [OK] Python found.
 echo.
 echo [*] Installing required libraries...
 python -m pip install --upgrade pip --quiet
-python -m pip install playwright anthropic --quiet
+python -m pip install playwright anthropic aiohttp pyngrok --quiet
 
 echo [*] Installing browser (this may take a few minutes)...
 python -m playwright install chromium
@@ -29,10 +29,13 @@ echo   Setup complete!
 echo ============================================
 echo.
 echo Next steps:
-echo   1. Open config.json with Notepad
-echo   2. Enter your Catawiki email address
-echo   3. Get a free API key at console.anthropic.com
-echo      and paste it into config.json
-echo   4. Double-click start.bat to launch the bot
+echo   1. Open config.json with Notepad and fill in all 5 fields:
+echo      - Catawiki email
+echo      - Anthropic API key  (console.anthropic.com)
+echo      - LINE Channel Access Token
+echo      - LINE User ID
+echo      - ngrok auth token   (ngrok.com)
+echo   2. See SETUP_GUIDE.txt for step-by-step instructions
+echo   3. Double-click start.bat to launch the bot
 echo.
 pause
