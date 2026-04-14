@@ -1,6 +1,7 @@
 import anthropic
 import asyncio
 import json
+import logging
 import sys
 import hashlib
 import aiohttp
@@ -9,6 +10,18 @@ import tkinter as tk
 from tkinter import simpledialog
 from pathlib import Path
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("bot.log", encoding="utf-8"),
+    ],
+)
+log = logging.getLogger(__name__)
 
 # ── Constants ────────────────────────────────────────────────────────────────
 CONFIG_FILE    = Path("config.json")
@@ -146,6 +159,7 @@ def translate_to_buyer_language(japanese_text: str, target_lang: str, api_key: s
 
 # ── LINE ──────────────────────────────────────────────────────────────────────
 async def line_send(token: str, user_id: str, text: str, buttons: bool = False):
+    log.debug(f"[LINE送信] {text[:80].replace(chr(10), ' ')}{'...' if len(text) > 80 else ''}")
     msg: dict = {"type": "text", "text": text}
     if buttons:
         msg["quickReply"] = {"items": [
@@ -155,12 +169,15 @@ async def line_send(token: str, user_id: str, text: str, buttons: bool = False):
                 "type": "message", "label": "Skip", "text": "__SKIP__"}},
         ]}
     async with aiohttp.ClientSession() as s:
-        await s.post(
+        r = await s.post(
             "https://api.line.me/v2/bot/message/push",
             headers={"Authorization": f"Bearer {token}",
                      "Content-Type": "application/json"},
             json={"to": user_id, "messages": [msg]},
         )
+        if r.status != 200:
+            body = await r.text()
+            log.warning(f"[LINE送信失敗] status={r.status} {body}")
 
 async def set_line_webhook(token: str, url: str):
     async with aiohttp.ClientSession() as s:
@@ -171,35 +188,40 @@ async def set_line_webhook(token: str, url: str):
             json={"webhookEndpoint": url},
         )
         if r.status == 200:
-            print("[LINE] Webhook URL を自動設定しました。")
+            log.info("[LINE] Webhook URL を自動設定しました。")
         else:
             body = await r.text()
-            print(f"[LINE] Webhook URL の自動設定に失敗しました ({r.status}): {body}")
-            print(f"[LINE] 手動で設定してください：")
-            print(f"  LINE Developersコンソール → Messaging API → Webhook URL")
-            print(f"  に以下を貼り付けて「更新」→「検証」:")
-            print(f"  {url}")
+            log.warning(f"[LINE] Webhook URL の自動設定に失敗しました ({r.status}): {body}")
+            log.warning(f"[LINE] 手動で設定してください：")
+            log.warning(f"  LINE Developersコンソール → Messaging API → Webhook URL")
+            log.warning(f"  に以下を貼り付けて「更新」→「検証」: {url}")
 
 # ── LINE webhook server ───────────────────────────────────────────────────────
 async def handle_webhook(request: web.Request) -> web.Response:
     try:
         data = await request.json()
-    except Exception:
+    except Exception as e:
+        log.warning(f"[Webhook] JSONパース失敗: {e}")
         return web.Response(status=400)
+
+    log.debug(f"[Webhook] イベント受信: {json.dumps(data, ensure_ascii=False)[:200]}")
 
     for event in data.get("events", []):
         if event.get("type") == "message":
             msg = event.get("message", {})
             if msg.get("type") == "text":
                 text = msg["text"].strip()
+                log.info(f"[Webhook] LINEからメッセージ受信: {text[:80]}")
                 if text == "__SEND__":
+                    log.info("[Webhook] → 送信ボタンが押されました")
                     approval_data.update({"action": "send", "custom": None})
                     approval_event.set()
                 elif text == "__SKIP__":
+                    log.info("[Webhook] → スキップボタンが押されました")
                     approval_data.update({"action": "skip"})
                     approval_event.set()
                 else:
-                    # Treat any other text as a custom reply
+                    log.info(f"[Webhook] → カスタム返信: {text[:80]}")
                     approval_data.update({"action": "send", "custom": text})
                     approval_event.set()
 
@@ -219,15 +241,18 @@ SEND_SEL  = ('button[type="submit"], .send-button, '
              'button:has-text("Send"), button:has-text("Verstuur")')
 
 async def ensure_logged_in(page, config) -> bool:
+    log.info("[Catawiki] ログイン状態を確認中...")
     await page.goto("https://www.catawiki.com",
                     wait_until="domcontentloaded", timeout=30000)
     try:
         await page.wait_for_selector(
             '[data-testid="header-account"], .header-account', timeout=5000)
+        log.info("[Catawiki] セッション維持中（再ログイン不要）")
         return True
     except PlaywrightTimeoutError:
         pass
 
+    log.info("[Catawiki] ログインページへ移動中...")
     await page.goto("https://www.catawiki.com/login",
                     wait_until="networkidle", timeout=30000)
     try:
@@ -237,16 +262,21 @@ async def ensure_logged_in(page, config) -> bool:
         await page.wait_for_load_state("networkidle", timeout=30000)
     except Exception as e:
         await page.screenshot(path="debug_login.png")
-        print(f"Login failed: {e}")
+        log.error(f"[Catawiki] ログイン失敗: {e}")
         return False
-    return "/login" not in page.url
+    result = "/login" not in page.url
+    log.info(f"[Catawiki] ログイン{'成功' if result else '失敗'} URL={page.url}")
+    return result
 
 async def fetch_threads(page) -> list:
+    log.debug("[Catawiki] メッセージページを読み込み中...")
     for url in MESSAGE_URLS:
         await page.goto(url, wait_until="networkidle", timeout=30000)
+        log.debug(f"[Catawiki] 現在のURL: {page.url}")
         if "message" in page.url:
             break
     items = await page.query_selector_all(THREAD_SEL)
+    log.debug(f"[Catawiki] スレッド数: {len(items)}")
     threads = []
     for el in items:
         text = (await el.inner_text()).strip()
@@ -260,20 +290,26 @@ async def send_catawiki_reply(page, thread: dict, reply_text: str) -> bool:
         href = thread.get("href", "")
         if href and not href.startswith("http"):
             href = "https://www.catawiki.com" + href
+        log.info(f"[Catawiki] 返信ページへ移動: {href}")
         if href:
             await page.goto(href, wait_until="networkidle", timeout=30000)
         box = await page.query_selector(REPLY_SEL)
         if not box:
+            log.warning("[Catawiki] 返信テキストエリアが見つかりません")
             return False
         await box.click()
         await box.fill(reply_text)
+        log.debug(f"[Catawiki] 入力テキスト: {reply_text[:80]}")
         btn = await page.query_selector(SEND_SEL)
         if not btn:
+            log.warning("[Catawiki] 送信ボタンが見つかりません")
             return False
         await btn.click()
         await page.wait_for_load_state("networkidle", timeout=15000)
+        log.info("[Catawiki] 返信送信完了")
         return True
-    except Exception:
+    except Exception as e:
+        log.error(f"[Catawiki] 返信送信エラー: {e}")
         return False
 
 # ── Message processing loop ───────────────────────────────────────────────────
@@ -350,31 +386,40 @@ async def process_messages_loop(config: dict):
 async def check_catawiki_loop(config: dict):
     """Check Catawiki for new messages every 5 minutes."""
     seen_ids: set = set(load_json(SEEN_FILE, default=[]))
-    print("Bot is running. Checking Catawiki every 5 minutes...")
+    log.info(f"ボット起動完了。5分ごとにCatawikiを確認します。既読スレッド数: {len(seen_ids)}")
 
     while True:
         try:
+            log.info("[チェック] Catawikiのメッセージを確認中...")
             threads = await fetch_threads(browser_page)
+            log.info(f"[チェック] スレッド {len(threads)} 件取得。新着を確認中...")
+            new_count = 0
             for thread in threads:
                 tid = thread_id(thread)
                 if tid in seen_ids:
                     continue
 
+                new_count += 1
                 seen_ids.add(tid)
                 save_json(SEEN_FILE, list(seen_ids))
+                preview = thread["text"][:80].replace("\n", " ")
+                log.info(f"[新着] {preview}")
 
-                print(f"New message found. Generating AI reply...")
+                log.info("[AI] 返信を生成中...")
                 try:
                     result = await asyncio.get_event_loop().run_in_executor(
                         None, generate_reply, thread["text"], config["anthropic_api_key"]
                     )
+                    log.info(f"[AI] 言語={result['lang']} 要確認={result['needs_review']}")
+                    log.debug(f"[AI] 返信: {result['reply'][:80]}")
                 except Exception as e:
-                    print(f"AI error: {e}")
+                    log.error(f"[AI] エラー: {e}")
                     await line_send(config["line_token"], config["line_user_id"],
                                     f"AIエラーが発生しました。Catawikiを直接確認してください。\n\nエラー: {e}")
                     continue
 
                 if result["needs_review"]:
+                    log.info("[AI] 要確認フラグあり → LINEに通知")
                     note = result["reply"].replace("[NEEDS_REVIEW]", "").strip()
                     msg_preview = thread["text"][:200]
                     msg_ja = result["message_ja"][:200] if result["message_ja"] else ""
@@ -386,6 +431,7 @@ async def check_catawiki_loop(config: dict):
                     await line_send(config["line_token"], config["line_user_id"],
                                     "\n".join(lines))
                 else:
+                    log.info("[AI] 返信案生成完了 → 承認待ちキューに追加")
                     await message_queue.put({
                         "thread":     thread,
                         "ai_reply":   result["reply"],
@@ -394,9 +440,13 @@ async def check_catawiki_loop(config: dict):
                         "lang":       result["lang"],
                     })
 
-        except Exception as e:
-            print(f"Catawiki check error: {e}")
+            if new_count == 0:
+                log.info("[チェック] 新着なし")
 
+        except Exception as e:
+            log.error(f"[チェック] エラー: {e}", exc_info=True)
+
+        log.debug(f"[チェック] 次回確認まで {CHECK_INTERVAL} 秒待機")
         await asyncio.sleep(CHECK_INTERVAL)
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -404,8 +454,8 @@ async def main():
     global browser_page
 
     if not CONFIG_FILE.exists():
-        print("config.json not found. Run setup.bat first.")
-        input("Press Enter to exit...")
+        log.error("config.json が見つかりません。setup.bat を先に実行してください。")
+        input("Enterキーを押して終了...")
         sys.exit(1)
 
     try:
@@ -433,9 +483,10 @@ async def main():
     for key in ["email", "anthropic_api_key", "line_token", "line_user_id", "ngrok_auth_token"]:
         val = config.get(key, "")
         if not val or val.startswith("Enter"):
-            print(f"Please set '{key}' in config.json")
-            input("Press Enter to exit...")
+            log.error(f"config.json の '{key}' が設定されていません")
+            input("Enterキーを押して終了...")
             sys.exit(1)
+    log.info("config.json 読み込み完了")
 
     # Ask for Catawiki password
     root = tk.Tk()
@@ -454,10 +505,10 @@ async def main():
     runner = web.AppRunner(app)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", WEBHOOK_PORT).start()
-    print(f"Webhookサーバー起動完了 (port {WEBHOOK_PORT})")
+    log.info(f"Webhookサーバー起動完了 (port {WEBHOOK_PORT})")
 
     # Start ngrok tunnel
-    print("ngrokトンネルを起動中...")
+    log.info("ngrokトンネルを起動中...")
     try:
         from pyngrok import ngrok, conf
         conf.get_default().auth_token = config["ngrok_auth_token"]
@@ -467,10 +518,10 @@ async def main():
         else:
             tunnel = ngrok.connect(WEBHOOK_PORT, "http")
         webhook_url = f"{tunnel.public_url}/webhook"
-        print(f"Webhook URL: {webhook_url}")
+        log.info(f"Webhook URL: {webhook_url}")
     except Exception as e:
-        print(f"ngrokエラー: {e}")
-        print("pyngrokがインストールされているか、ngrok認証トークンが正しいか確認してください。")
+        log.error(f"ngrokエラー: {e}")
+        log.error("pyngrokがインストールされているか、ngrok認証トークンが正しいか確認してください。")
         input("Enterキーを押して終了...")
         sys.exit(1)
 
@@ -489,11 +540,11 @@ async def main():
 
         ok = await ensure_logged_in(browser_page, config)
         if not ok:
-            print("Catawiki login failed.")
-            input("Press Enter to exit...")
+            log.error("Catawikiログイン失敗。スクリーンショット: debug_login.png")
+            input("Enterキーを押して終了...")
             return
 
-        print("ログイン成功。ボットはバックグラウンドで動作中。")
+        log.info("ログイン成功。ボットはバックグラウンドで動作中。")
         await line_send(config["line_token"], config["line_user_id"],
                         "Catawikiボット起動しました！\n新着メッセージが届いたらここに通知します。")
 
@@ -507,4 +558,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\nBot stopped.")
+        log.info("ボットを停止しました。")
