@@ -64,14 +64,83 @@ def thread_id(thread: dict) -> str:
     return hashlib.md5(key.encode()).hexdigest()
 
 # ── Claude API ────────────────────────────────────────────────────────────────
-def generate_reply(message_text: str, api_key: str) -> str:
+def generate_reply(message_text: str, api_key: str) -> dict:
+    """Generate AI reply and Japanese translations in a single API call.
+
+    Returns a dict with keys:
+      reply      – the reply to send to Catawiki (EN or NL, buyer's language)
+      reply_ja   – Japanese translation of that reply (for the seller to read)
+      message_ja – Japanese translation of the buyer's original message
+      lang       – detected buyer language ("en", "nl", or "other")
+      needs_review – True when the reply starts with [NEEDS_REVIEW]
+    """
+    client = anthropic.Anthropic(api_key=api_key)
+
+    user_prompt = (
+        f"{message_text}\n\n"
+        "---\n"
+        "After writing the reply above, also output the following block EXACTLY "
+        "(no extra text before or after the block):\n\n"
+        "<<<TRANSLATIONS>>>\n"
+        "LANG: <en|nl|other>\n"
+        "MESSAGE_JA: <Japanese translation of the buyer's message above>\n"
+        "REPLY_JA: <Japanese translation of the reply you just wrote>\n"
+        "<<<END>>>"
+    )
+
+    resp = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=2048,
+        system=[{"type": "text", "text": SYSTEM_PROMPT,
+                 "cache_control": {"type": "ephemeral"}}],
+        messages=[{"role": "user", "content": user_prompt}],
+    )
+    full_text = resp.content[0].text.strip()
+
+    # Split reply from translation block
+    if "<<<TRANSLATIONS>>>" in full_text and "<<<END>>>" in full_text:
+        reply_part, rest = full_text.split("<<<TRANSLATIONS>>>", 1)
+        trans_block, _ = rest.split("<<<END>>>", 1)
+        reply = reply_part.strip()
+
+        lang = "other"
+        message_ja = ""
+        reply_ja = ""
+        for line in trans_block.strip().splitlines():
+            if line.startswith("LANG:"):
+                lang = line[5:].strip().lower()
+            elif line.startswith("MESSAGE_JA:"):
+                message_ja = line[11:].strip()
+            elif line.startswith("REPLY_JA:"):
+                reply_ja = line[9:].strip()
+    else:
+        # Fallback: treat entire response as reply, no translations
+        reply = full_text
+        lang = "other"
+        message_ja = ""
+        reply_ja = ""
+
+    needs_review = reply.startswith("[NEEDS_REVIEW]")
+    return {
+        "reply": reply,
+        "reply_ja": reply_ja,
+        "message_ja": message_ja,
+        "lang": lang,
+        "needs_review": needs_review,
+    }
+
+def translate_to_buyer_language(japanese_text: str, target_lang: str, api_key: str) -> str:
+    """Translate a Japanese message to the buyer's language (EN or NL)."""
+    if target_lang == "nl":
+        instruction = "Translate the following Japanese text to Dutch. Output only the translation."
+    else:
+        instruction = "Translate the following Japanese text to English. Output only the translation."
+
     client = anthropic.Anthropic(api_key=api_key)
     resp = client.messages.create(
         model="claude-opus-4-6",
         max_tokens=1024,
-        system=[{"type": "text", "text": SYSTEM_PROMPT,
-                 "cache_control": {"type": "ephemeral"}}],
-        messages=[{"role": "user", "content": message_text}],
+        messages=[{"role": "user", "content": f"{instruction}\n\n{japanese_text}"}],
     )
     return resp.content[0].text.strip()
 
@@ -205,22 +274,32 @@ async def send_catawiki_reply(page, thread: dict, reply_text: str) -> bool:
 async def process_messages_loop(config: dict):
     """Send LINE notifications and wait for approval one message at a time."""
     while True:
-        msg_data = await message_queue.get()
-        thread   = msg_data["thread"]
-        ai_reply = msg_data["ai_reply"]
+        msg_data  = await message_queue.get()
+        thread    = msg_data["thread"]
+        ai_reply  = msg_data["ai_reply"]       # EN/NL reply to Catawiki
+        reply_ja  = msg_data["reply_ja"]       # Japanese translation of reply
+        message_ja = msg_data["message_ja"]    # Japanese translation of buyer msg
+        buyer_lang = msg_data["lang"]          # "en" / "nl" / "other"
 
-        preview = thread["text"][:300] + ("..." if len(thread["text"]) > 300 else "")
-        text = (
-            "New message on Catawiki:\n\n"
-            f"{preview}\n\n"
-            "──────────────────\n"
-            "AI suggested reply:\n\n"
-            f"{ai_reply}\n\n"
-            "──────────────────\n"
-            "Tap 'Send reply' to send the AI reply.\n"
-            "Tap 'Skip' to skip.\n"
-            "Or type your own reply to send that instead."
-        )
+        preview    = thread["text"][:200] + ("..." if len(thread["text"]) > 200 else "")
+        preview_ja = message_ja[:200] + ("..." if len(message_ja) > 200 else "") if message_ja else ""
+
+        lines = ["【新着Catawikiメッセージ】\n"]
+        lines.append(f"【原文】\n{preview}\n")
+        if preview_ja:
+            lines.append(f"【日本語訳】\n{preview_ja}\n")
+        lines.append("──────────────────")
+        lines.append("【AI返信案（原文）】")
+        lines.append(ai_reply)
+        if reply_ja:
+            lines.append("\n【AI返信案（日本語訳）】")
+            lines.append(reply_ja)
+        lines.append("\n──────────────────")
+        lines.append("「返信を送る」→AI返信をそのまま送信")
+        lines.append("「スキップ」→この会話をスキップ")
+        lines.append("日本語で入力→自動翻訳して送信")
+
+        text = "\n".join(lines)
         await line_send(config["line_token"], config["line_user_id"],
                         text, buttons=True)
 
@@ -231,17 +310,35 @@ async def process_messages_loop(config: dict):
             await asyncio.wait_for(approval_event.wait(), timeout=43200)
         except asyncio.TimeoutError:
             await line_send(config["line_token"], config["line_user_id"],
-                            "No response in 12 hours. Skipping this message.")
+                            "12時間応答なし。この会話をスキップします。")
             continue
 
         action = approval_data.get("action")
         if action == "send":
-            reply_text = approval_data.get("custom") or ai_reply
+            custom = approval_data.get("custom")
+            if custom:
+                # User typed a custom reply in Japanese — translate it first
+                try:
+                    reply_text = await asyncio.get_event_loop().run_in_executor(
+                        None, translate_to_buyer_language,
+                        custom, buyer_lang, config["anthropic_api_key"]
+                    )
+                    await line_send(
+                        config["line_token"], config["line_user_id"],
+                        f"翻訳しました：\n{reply_text}\n\nCatawikiに送信します..."
+                    )
+                except Exception as e:
+                    print(f"Translation error: {e}")
+                    reply_text = custom   # fallback: send as-is
+                    await line_send(config["line_token"], config["line_user_id"],
+                                    f"翻訳に失敗しました。原文のまま送信します。\nエラー: {e}")
+            else:
+                reply_text = ai_reply
             ok = await send_catawiki_reply(browser_page, thread, reply_text)
-            status = "Reply sent on Catawiki!" if ok else "Failed to send reply. Please check Catawiki manually."
+            status = "返信をCatawikiに送りました！" if ok else "送信に失敗しました。Catawikiを直接確認してください。"
             await line_send(config["line_token"], config["line_user_id"], status)
         else:
-            await line_send(config["line_token"], config["line_user_id"], "Skipped.")
+            await line_send(config["line_token"], config["line_user_id"], "スキップしました。")
 
 # ── Catawiki check loop ───────────────────────────────────────────────────────
 async def check_catawiki_loop(config: dict):
@@ -262,21 +359,34 @@ async def check_catawiki_loop(config: dict):
 
                 print(f"New message found. Generating AI reply...")
                 try:
-                    ai_reply = generate_reply(thread["text"], config["anthropic_api_key"])
+                    result = await asyncio.get_event_loop().run_in_executor(
+                        None, generate_reply, thread["text"], config["anthropic_api_key"]
+                    )
                 except Exception as e:
                     print(f"AI error: {e}")
                     await line_send(config["line_token"], config["line_user_id"],
-                                    f"AI error for a new message. Please check Catawiki manually.\n\nError: {e}")
+                                    f"AIエラーが発生しました。Catawikiを直接確認してください。\n\nエラー: {e}")
                     continue
 
-                if ai_reply.startswith("[NEEDS_REVIEW]"):
-                    note = ai_reply.replace("[NEEDS_REVIEW]", "").strip()
-                    await line_send(
-                        config["line_token"], config["line_user_id"],
-                        f"New message needs your attention:\n\n{thread['text'][:300]}\n\n{note}"
-                    )
+                if result["needs_review"]:
+                    note = result["reply"].replace("[NEEDS_REVIEW]", "").strip()
+                    msg_preview = thread["text"][:200]
+                    msg_ja = result["message_ja"][:200] if result["message_ja"] else ""
+                    lines = ["【要確認メッセージ】\n",
+                             f"【原文】\n{msg_preview}"]
+                    if msg_ja:
+                        lines.append(f"\n【日本語訳】\n{msg_ja}")
+                    lines.append(f"\n{note}")
+                    await line_send(config["line_token"], config["line_user_id"],
+                                    "\n".join(lines))
                 else:
-                    await message_queue.put({"thread": thread, "ai_reply": ai_reply})
+                    await message_queue.put({
+                        "thread":     thread,
+                        "ai_reply":   result["reply"],
+                        "reply_ja":   result["reply_ja"],
+                        "message_ja": result["message_ja"],
+                        "lang":       result["lang"],
+                    })
 
         except Exception as e:
             print(f"Catawiki check error: {e}")
