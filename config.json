@@ -1,4 +1,4 @@
 {
-  "email": "ここにCatawikiのメールアドレスを入力",
-  "default_language": "en"
+  "email": "Enter your Catawiki email here",
+  "anthropic_api_key": "Enter your Anthropic API key here (starts with sk-ant-)"
 }

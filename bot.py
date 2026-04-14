@@ -1,3 +1,4 @@
+import anthropic
 import asyncio
 import json
 import sys
@@ -7,8 +8,30 @@ from pathlib import Path
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 
 CONFIG_FILE  = Path("config.json")
-TEMPLATE_FILE = Path("templates.json")
-BROWSER_DATA  = Path("browser_data")
+BROWSER_DATA = Path("browser_data")
+
+SYSTEM_PROMPT = """You are a customer service assistant for a Catawiki seller who handcrafts and sells wooden watches.
+
+About the seller:
+- Sells unique, handcrafted hardwood watches on Catawiki
+- Ships with DHL within 2-3 business days after payment confirmation
+- Delivery within Europe: 3-7 business days
+- Each watch is handmade from genuine, sustainably sourced hardwood — every piece is unique
+- Water resistance: 3 ATM (splash and rain resistant, NOT suitable for swimming or diving)
+- Case diameter: approximately 42mm, thickness: 12mm, strap width: 22mm
+- Returns/issues: handled with care and goodwill
+
+Your job:
+- Reply to customer messages in a friendly, warm, and human-like way
+- Always respond in the SAME LANGUAGE as the customer (English or Dutch)
+- Keep replies concise but complete — no unnecessary filler
+- If you can answer confidently, write the full reply ready to send
+- If the message requires information you don't have (specific order status, tracking number,
+  custom requests, complaints needing investigation, or anything else outside your knowledge),
+  start your reply with exactly: [NEEDS_REVIEW]
+  Then briefly explain what information is needed from the seller.
+
+Never make up order details, tracking numbers, or delivery dates you don't know."""
 
 # ------------------------------------------------------------------ helpers --
 
@@ -16,22 +39,30 @@ def load_json(path):
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def detect_language(text):
-    dutch = ["wanneer", "hoe", "wat", "bedankt", "dank", "verzend",
-             "ontvangen", "bestelling", "levering", "horloge"]
-    score = sum(1 for w in dutch if w in text.lower())
-    return "nl" if score >= 2 else "en"
-
-def find_faq_reply(text, templates, lang):
-    low = text.lower()
-    for faq in templates["faq"]:
-        keywords = faq.get(f"keywords_{lang}", [])
-        if any(k in low for k in keywords):
-            return faq[f"reply_{lang}"]
-    return None
-
 def hr():
     print("-" * 55)
+
+# ----------------------------------------------------------------- AI reply --
+
+def generate_reply(message_text: str, api_key: str) -> str:
+    """Call Claude API to generate a human-like reply."""
+    client = anthropic.Anthropic(api_key=api_key)
+
+    response = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=1024,
+        system=[{
+            "type": "text",
+            "text": SYSTEM_PROMPT,
+            "cache_control": {"type": "ephemeral"}
+        }],
+        messages=[{
+            "role": "user",
+            "content": message_text
+        }]
+    )
+
+    return response.content[0].text.strip()
 
 # ------------------------------------------------------------------- login ---
 
@@ -39,17 +70,16 @@ async def ensure_logged_in(page, config):
     await page.goto("https://www.catawiki.com", wait_until="domcontentloaded", timeout=30000)
     if "/login" not in page.url and "catawiki.com" in page.url:
         try:
-            # confirm there's a user-avatar / account element visible
             await page.wait_for_selector(
                 '[data-testid="header-account"], .header-account, [aria-label="Account"]',
                 timeout=5000
             )
-            print("✅ ログイン済みです")
+            print("Already logged in.")
             return True
         except PlaywrightTimeoutError:
             pass
 
-    print("🔐 ログイン中...")
+    print("Logging in to Catawiki...")
     await page.goto("https://www.catawiki.com/login", wait_until="networkidle", timeout=30000)
 
     try:
@@ -59,15 +89,15 @@ async def ensure_logged_in(page, config):
         await page.wait_for_load_state("networkidle", timeout=30000)
     except Exception as e:
         await page.screenshot(path="debug_login.png")
-        print(f"❌ ログイン失敗: {e}")
-        print("   → debug_login.png を確認してください")
+        print(f"Login failed: {e}")
+        print("  -> See debug_login.png")
         return False
 
     if "/login" in page.url:
-        print("❌ ログイン失敗 — メールアドレスまたはパスワードを確認してください")
+        print("Login failed -- check email and password in config.json")
         return False
 
-    print("✅ ログイン成功！")
+    print("Login successful!")
     return True
 
 # ---------------------------------------------------------------- messages ---
@@ -83,7 +113,7 @@ THREAD_SELECTORS = (
 )
 
 async def fetch_message_threads(page):
-    print("📬 メッセージを取得中...")
+    print("Fetching messages...")
     for url in MESSAGE_URLS:
         await page.goto(url, wait_until="networkidle", timeout=30000)
         if "message" in page.url:
@@ -93,8 +123,8 @@ async def fetch_message_threads(page):
     items = await page.query_selector_all(THREAD_SELECTORS)
 
     if not items:
-        print("⚠️  メッセージが見つかりませんでした")
-        print("   → debug_messages.png で画面を確認してください")
+        print("No messages found.")
+        print("  -> Check debug_messages.png to verify the page loaded correctly")
         return []
 
     threads = []
@@ -103,13 +133,16 @@ async def fetch_message_threads(page):
         link = await el.query_selector("a")
         href = await link.get_attribute("href") if link else None
         cls  = await el.get_attribute("class") or ""
-        threads.append({"text": text, "href": href,
-                         "unread": "unread" in cls.lower() or "new" in cls.lower()})
+        threads.append({
+            "text": text,
+            "href": href,
+            "unread": "unread" in cls.lower() or "new" in cls.lower()
+        })
     return threads
 
-REPLY_SELECTORS  = 'textarea[name="message"], textarea[placeholder], .reply-box textarea'
-SEND_SELECTORS   = ('button[type="submit"], .send-button, '
-                    'button:has-text("Send"), button:has-text("Verstuur")')
+REPLY_SELECTORS = 'textarea[name="message"], textarea[placeholder], .reply-box textarea'
+SEND_SELECTORS  = ('button[type="submit"], .send-button, '
+                   'button:has-text("Send"), button:has-text("Verstuur")')
 
 async def send_reply(page, thread, reply_text):
     try:
@@ -122,7 +155,7 @@ async def send_reply(page, thread, reply_text):
         box = await page.query_selector(REPLY_SELECTORS)
         if not box:
             await page.screenshot(path="debug_reply.png")
-            print("❌ 入力欄が見つかりません → debug_reply.png を確認")
+            print("Reply box not found -- see debug_reply.png")
             return False
 
         await box.click()
@@ -130,176 +163,134 @@ async def send_reply(page, thread, reply_text):
 
         btn = await page.query_selector(SEND_SELECTORS)
         if not btn:
-            print("❌ 送信ボタンが見つかりません")
+            print("Send button not found")
             return False
 
         await btn.click()
         await page.wait_for_load_state("networkidle", timeout=15000)
         return True
     except Exception as e:
-        print(f"❌ 送信エラー: {e}")
+        print(f"Send error: {e}")
         return False
 
 # -------------------------------------------------------- feature: messages --
 
-async def feature_check_messages(page, templates):
+async def feature_check_messages(page, api_key):
     threads = await fetch_message_threads(page)
     if not threads:
         return
 
-    print(f"\n📨 {len(threads)} 件のスレッドが見つかりました\n")
+    print(f"\n{len(threads)} message thread(s) found.\n")
+
     for i, t in enumerate(threads, 1):
         hr()
         print(f"[{i}/{len(threads)}]")
-        preview = t["text"][:220] + ("…" if len(t["text"]) > 220 else "")
+        preview = t["text"][:300] + ("..." if len(t["text"]) > 300 else "")
         print(preview)
-
-        lang  = detect_language(t["text"])
-        reply = find_faq_reply(t["text"], templates, lang)
-
-        if reply:
-            print(f"\n💡 自動返信案 ({'英語' if lang == 'en' else 'オランダ語'}):")
-            print(reply)
-            print()
-            choice = input("[s] 送信  [e] 編集  [n] スキップ > ").strip().lower()
-            if choice == "s":
-                ok = await send_reply(page, t, reply)
-                print("✅ 送信完了！" if ok else "❌ 送信失敗")
-            elif choice == "e":
-                print("返信内容を入力してください（空行で確定）:")
-                lines = []
-                while True:
-                    line = input()
-                    if line == "":
-                        break
-                    lines.append(line)
-                custom = "\n".join(lines)
-                if custom:
-                    ok = await send_reply(page, t, custom)
-                    print("✅ 送信完了！" if ok else "❌ 送信失敗")
-            else:
-                print("スキップ")
-        else:
-            print("⚠️  FAQに一致せず（手動対応が必要です）")
         print()
 
-# ------------------------------------------------------ feature: shipping ---
+        print("Generating reply with AI...")
+        try:
+            reply = generate_reply(t["text"], api_key)
+        except Exception as e:
+            print(f"AI error: {e}")
+            print("Skipping this message.")
+            continue
 
-async def feature_shipping(page, templates):
-    hr()
-    print("📦 発送通知を送る")
-    hr()
+        needs_review = reply.startswith("[NEEDS_REVIEW]")
 
-    tracking = input("DHLトラッキング番号: ").strip()
-    if not tracking:
-        print("キャンセル")
-        return
+        if needs_review:
+            print()
+            print("*** THIS MESSAGE NEEDS YOUR ATTENTION ***")
+            print(reply.replace("[NEEDS_REVIEW]", "").strip())
+            print()
+            input("Press Enter to continue to the next message...")
+            continue
 
-    lang = input("言語 (en=英語 / nl=オランダ語) [en]: ").strip().lower() or "en"
-    if lang not in ("en", "nl"):
-        lang = "en"
+        print()
+        print("AI reply:")
+        hr()
+        print(reply)
+        hr()
+        print()
+        print("[s] Send  [e] Edit  [n] Skip")
+        choice = input("> ").strip().lower()
 
-    msg = templates["shipping"][lang].replace("{tracking_number}", tracking)
-
-    print("\n送信内容プレビュー:")
-    hr()
-    print(msg)
-    hr()
-
-    print("\nブラウザでCatawikiのメッセージ画面を開きます")
-    print("送り先の会話URLをコピーして貼り付けてください")
-    input("Enterを押してブラウザを開く...")
-
-    for url in MESSAGE_URLS:
-        await page.goto(url, wait_until="networkidle", timeout=30000)
-        if "message" in page.url:
-            break
-
-    await page.screenshot(path="debug_messages.png")
-    print("📸 debug_messages.png に画面を保存しました")
-
-    conv_url = input("\n会話のURL（例: https://www.catawiki.com/my/messages/123）: ").strip()
-    if not conv_url:
-        print("キャンセル")
-        return
-
-    try:
-        await page.goto(conv_url, wait_until="networkidle", timeout=30000)
-        box = await page.query_selector(REPLY_SELECTORS)
-        if not box:
-            await page.screenshot(path="debug_shipping.png")
-            print("❌ 入力欄が見つかりません → debug_shipping.png を確認")
-            return
-
-        await box.fill(msg)
-        confirm = input("送信しますか？ (y/n): ").strip().lower()
-        if confirm == "y":
-            btn = await page.query_selector(SEND_SELECTORS)
-            if btn:
-                await btn.click()
-                print("✅ 発送通知を送信しました！")
+        if choice == "s":
+            ok = await send_reply(page, t, reply)
+            print("Sent!" if ok else "Failed to send.")
+        elif choice == "e":
+            # Open an edit dialog
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            edited = simpledialog.askstring(
+                "Edit reply",
+                "Edit the reply below:",
+                initialvalue=reply,
+                parent=root
+            )
+            root.destroy()
+            if edited and edited.strip():
+                ok = await send_reply(page, t, edited.strip())
+                print("Sent!" if ok else "Failed to send.")
             else:
-                print("❌ 送信ボタンが見つかりません")
+                print("Cancelled.")
         else:
-            print("キャンセル")
-    except Exception as e:
-        print(f"❌ エラー: {e}")
+            print("Skipped.")
+
+        print()
 
 # -------------------------------------------------------------------- main ---
 
 async def main():
-    for f in (CONFIG_FILE, TEMPLATE_FILE):
-        if not f.exists():
-            print(f"❌ {f} が見つかりません。setup.bat を実行してください。")
-            input("Enterで終了...")
-            sys.exit(1)
+    if not CONFIG_FILE.exists():
+        print(f"config.json not found. Please run setup.bat first.")
+        input("Press Enter to exit...")
+        sys.exit(1)
 
     try:
         config = load_json(CONFIG_FILE)
     except Exception:
-        print("❌ config.json の読み込みに失敗しました。")
-        print("   config.json をメモ帳で開いて内容を確認してください。")
+        print("Failed to read config.json.")
         print()
-        print('   正しい形式の例:')
-        print('   {')
-        print('     "email": "your@email.com",')
-        print('     "default_language": "en"')
-        print('   }')
-        input("\nEnterで終了...")
+        print("Correct format:")
+        print('{')
+        print('  "email": "your@email.com",')
+        print('  "anthropic_api_key": "sk-ant-..."')
+        print('}')
+        input("\nPress Enter to exit...")
         sys.exit(1)
-
-    templates = load_json(TEMPLATE_FILE)
 
     email = config.get("email", "")
-    if not email or email.startswith("ここに"):
-        print("❌ config.json にメールアドレスが設定されていません。")
-        print()
-        print("   config.json をメモ帳で開いて、")
-        print('   "email": の部分にCatawikiのメールアドレスを入力してください。')
-        print()
-        print('   例: "email": "your@email.com"')
-        input("\nEnterで終了...")
+    if not email or email.startswith("Enter"):
+        print("Please set your email in config.json")
+        input("Press Enter to exit...")
         sys.exit(1)
 
-    config["email"] = email
+    api_key = config.get("anthropic_api_key", "")
+    if not api_key or api_key.startswith("Enter"):
+        print("Please set your Anthropic API key in config.json")
+        print("Get your key at: https://console.anthropic.com/")
+        input("Press Enter to exit...")
+        sys.exit(1)
 
+    # Ask for Catawiki password via dialog
     root = tk.Tk()
     root.withdraw()
     root.attributes("-topmost", True)
     password = simpledialog.askstring(
         "Catawiki Login",
-        "Catawikiのパスワードを入力してください:",
+        "Enter your Catawiki password:",
         show="*",
         parent=root
     )
     root.destroy()
 
     if not password:
-        messagebox.showerror("エラー", "パスワードが入力されませんでした。")
-        sys.exit(1)
+        sys.exit(0)
 
     config["password"] = password
-        sys.exit(1)
 
     BROWSER_DATA.mkdir(exist_ok=True)
 
@@ -313,30 +304,27 @@ async def main():
 
         ok = await ensure_logged_in(page, config)
         if not ok:
-            input("Enterで終了...")
+            input("Press Enter to exit...")
             await ctx.close()
             return
 
         while True:
             print()
             print("=" * 55)
-            print("  🌿 Catawiki 自動化ボット")
+            print("  Catawiki AI Customer Service Bot")
             print("=" * 55)
-            print("  1. メッセージを確認して自動返信")
-            print("  2. 発送通知を送る（トラッキング番号付き）")
-            print("  3. 終了")
+            print("  1. Check messages and generate AI replies")
+            print("  2. Exit")
             print("=" * 55)
-            choice = input("  番号を選んでEnter: ").strip()
+            choice = input("  Enter number: ").strip()
 
             if choice == "1":
-                await feature_check_messages(page, templates)
+                await feature_check_messages(page, api_key)
             elif choice == "2":
-                await feature_shipping(page, templates)
-            elif choice == "3":
-                print("終了します。お疲れ様でした！")
+                print("Goodbye!")
                 break
             else:
-                print("1、2、または3を入力してください")
+                print("Please enter 1 or 2.")
 
         await ctx.close()
 
@@ -344,4 +332,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n終了しました")
+        print("\nExited.")
