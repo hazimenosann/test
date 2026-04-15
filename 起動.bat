@@ -11,6 +11,11 @@ if %errorlevel% neq 0 (
     exit /b
 )
 
+echo [*] Releasing port 5000...
+for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr ":5000 "') do (
+    taskkill /PID %%a /F > nul 2>&1
+)
+
 python bot.py
 if %errorlevel% neq 0 (
     echo.
