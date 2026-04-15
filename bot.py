@@ -294,12 +294,19 @@ async def ensure_logged_in(page, config) -> bool:
         log.info(f"[Catawiki] ログインボタンクリック結果: {clicked}")
         log.info("[Catawiki] ログインフォームを待機中...")
 
-        EMAIL_SEL  = 'input[type="email"], input[name="email"], input[id*="email"]'
-        PASS_SEL   = 'input[type="password"], input[name="password"]'
-        SUBMIT_SEL = 'button[type="submit"]'
+        EMAIL_SEL  = (
+            'input[placeholder*="Email" i], input[placeholder*="email" i], '
+            'input[type="email"], input[name="email"], input[autocomplete="email"]'
+        )
+        PASS_SEL   = 'input[type="password"], input[name="password"], input[placeholder*="Password" i]'
+        SUBMIT_SEL = 'button[type="submit"], button:has-text("Sign In"), button:has-text("Sign in")'
+
+        # Wait for modal animation to complete
+        await page.wait_for_timeout(1500)
 
         log.info("[Catawiki] メールアドレスを入力中...")
         await page.wait_for_selector(EMAIL_SEL, timeout=15000)
+        await page.click(EMAIL_SEL)
         await page.fill(EMAIL_SEL, config["email"])
 
         log.info("[Catawiki] パスワードを入力中...")
