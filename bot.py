@@ -240,14 +240,15 @@ async def _dismiss_cookie_banner(page):
         'button:has-text("Accept all"), button:has-text("Accept cookies"), '
         'button:has-text("Alle cookies accepteren"), '
         'button:has-text("Accepteer"), button:has-text("Akkoord"), '
+        'button:has-text("Agree"), '
         '[id*="onetrust-accept"], [id*="cookie-accept"]'
     )
     try:
-        btn = await page.wait_for_selector(COOKIE_SEL, timeout=5000)
+        btn = await page.wait_for_selector(COOKIE_SEL, timeout=4000)
         if btn:
             await btn.click()
             log.info("[Catawiki] クッキー同意バナーを閉じました")
-            await page.wait_for_timeout(1000)
+            await page.wait_for_timeout(800)
     except PlaywrightTimeoutError:
         pass  # バナーなし
 
@@ -294,8 +295,9 @@ async def ensure_logged_in(page, config) -> bool:
         log.info(f"[Catawiki] ログインボタンクリック結果: {clicked}")
         log.info("[Catawiki] ログインフォームを待機中...")
 
-        # Wait for modal animation to complete
+        # Wait for modal animation, then dismiss cookie banner if it appeared
         await page.wait_for_timeout(2000)
+        await _dismiss_cookie_banner(page)
         await page.screenshot(path="debug_modal.png")
 
         log.info("[Catawiki] メールアドレスを入力中...")
