@@ -220,8 +220,9 @@ async def handle_webhook(request: web.Request) -> web.Response:
 
 # ── Catawiki ──────────────────────────────────────────────────────────────────
 MESSAGE_URLS = [
+    "https://www.catawiki.com/en/my/messages",
+    "https://www.catawiki.com/en/messages",
     "https://www.catawiki.com/my/messages",
-    "https://www.catawiki.com/messages",
 ]
 THREAD_SEL = (
     ".conversation-list-item, .message-thread, .inbox-row, "
@@ -252,7 +253,7 @@ async def _dismiss_cookie_banner(page):
 
 async def ensure_logged_in(page, config) -> bool:
     log.info("[Catawiki] ログイン状態を確認中...")
-    await page.goto("https://www.catawiki.com",
+    await page.goto("https://www.catawiki.com/en",
                     wait_until="domcontentloaded", timeout=30000)
     await _dismiss_cookie_banner(page)
 
@@ -272,13 +273,25 @@ async def ensure_logged_in(page, config) -> bool:
     await page.screenshot(path="debug_before_login.png")
 
     try:
-        # Click the "Inloggen" button on the homepage (opens modal)
-        LOGIN_BTN = (
-            'a:has-text("Inloggen"), button:has-text("Inloggen"), '
-            'a[href*="login"], [data-testid*="login"]'
-        )
-        await page.wait_for_selector(LOGIN_BTN, timeout=10000)
-        await page.click(LOGIN_BTN)
+        # Click the header "Log in" button (English version)
+        # Use evaluate to click the first visible login link in the header
+        clicked = await page.evaluate("""() => {
+            const selectors = [
+                'a[href*="/en/login"]',
+                'a[href*="/login"]',
+                'header a:last-of-type',
+            ];
+            for (const sel of selectors) {
+                const el = document.querySelector(sel);
+                if (el) { el.click(); return true; }
+            }
+            // Fallback: click last button in header that looks like login
+            const btns = [...document.querySelectorAll('header button, header a')];
+            const btn = btns[btns.length - 1];
+            if (btn) { btn.click(); return true; }
+            return false;
+        }""")
+        log.info(f"[Catawiki] ログインボタンクリック結果: {clicked}")
         log.info("[Catawiki] ログインフォームを待機中...")
 
         EMAIL_SEL  = 'input[type="email"], input[name="email"], input[id*="email"]'
@@ -597,7 +610,7 @@ async def main():
                 "Chrome/131.0.0.0 Safari/537.36"
             ),
             viewport={"width": 1280, "height": 800},
-            locale="nl-NL",
+            locale="en-GB",
         )
         try:
             ctx = await p.chromium.launch_persistent_context(
