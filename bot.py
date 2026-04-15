@@ -255,24 +255,34 @@ async def ensure_logged_in(page, config) -> bool:
     await page.goto("https://www.catawiki.com",
                     wait_until="domcontentloaded", timeout=30000)
     await _dismiss_cookie_banner(page)
+
+    # Check if already logged in
     try:
         await page.wait_for_selector(
             '[data-testid="header-account"], .header-account, '
-            'a[href*="/logout"], [data-testid="user-menu"]', timeout=5000)
+            'a[href*="/logout"], [data-testid="user-menu"], '
+            'a[href*="/my/"], button[aria-label*="account"]',
+            timeout=5000)
         log.info("[Catawiki] セッション維持中（再ログイン不要）")
         return True
     except PlaywrightTimeoutError:
         pass
 
-    log.info("[Catawiki] ログインページへ移動中...")
-    await page.goto("https://www.catawiki.com/login",
-                    wait_until="networkidle", timeout=30000)
-    await _dismiss_cookie_banner(page)
+    log.info("[Catawiki] ログインボタンをクリック...")
     await page.screenshot(path="debug_before_login.png")
 
     try:
-        EMAIL_SEL = 'input[type="email"], input[name="email"], input[id*="email"]'
-        PASS_SEL  = 'input[type="password"], input[name="password"]'
+        # Click the "Inloggen" button on the homepage (opens modal)
+        LOGIN_BTN = (
+            'a:has-text("Inloggen"), button:has-text("Inloggen"), '
+            'a[href*="login"], [data-testid*="login"]'
+        )
+        await page.wait_for_selector(LOGIN_BTN, timeout=10000)
+        await page.click(LOGIN_BTN)
+        log.info("[Catawiki] ログインフォームを待機中...")
+
+        EMAIL_SEL  = 'input[type="email"], input[name="email"], input[id*="email"]'
+        PASS_SEL   = 'input[type="password"], input[name="password"]'
         SUBMIT_SEL = 'button[type="submit"]'
 
         log.info("[Catawiki] メールアドレスを入力中...")
@@ -292,11 +302,19 @@ async def ensure_logged_in(page, config) -> bool:
         log.error("[Catawiki] スクリーンショット: debug_login_failed.png を確認してください")
         return False
 
-    result = "/login" not in page.url
-    log.info(f"[Catawiki] ログイン{'成功' if result else '失敗'} URL={page.url}")
-    if not result:
-        await page.screenshot(path="debug_login_failed.png")
-    return result
+    # Success = no longer on a login-related page and some account element visible
+    await page.screenshot(path="debug_after_login.png")
+    try:
+        await page.wait_for_selector(
+            '[data-testid="header-account"], .header-account, '
+            'a[href*="/logout"], [data-testid="user-menu"], '
+            'a[href*="/my/"], button[aria-label*="account"]',
+            timeout=8000)
+        log.info(f"[Catawiki] ログイン成功 URL={page.url}")
+        return True
+    except PlaywrightTimeoutError:
+        log.error(f"[Catawiki] ログイン後のアカウント要素が見つかりません URL={page.url}")
+        return False
 
 async def fetch_threads(page) -> list:
     log.debug("[Catawiki] メッセージページを読み込み中...")
