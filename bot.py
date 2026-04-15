@@ -294,27 +294,24 @@ async def ensure_logged_in(page, config) -> bool:
         log.info(f"[Catawiki] ログインボタンクリック結果: {clicked}")
         log.info("[Catawiki] ログインフォームを待機中...")
 
-        EMAIL_SEL  = (
-            'input[placeholder*="Email" i], input[placeholder*="email" i], '
-            'input[type="email"], input[name="email"], input[autocomplete="email"]'
-        )
-        PASS_SEL   = 'input[type="password"], input[name="password"], input[placeholder*="Password" i]'
-        SUBMIT_SEL = 'button[type="submit"], button:has-text("Sign In"), button:has-text("Sign in")'
-
         # Wait for modal animation to complete
-        await page.wait_for_timeout(1500)
+        await page.wait_for_timeout(2000)
+        await page.screenshot(path="debug_modal.png")
 
         log.info("[Catawiki] メールアドレスを入力中...")
-        await page.wait_for_selector(EMAIL_SEL, timeout=15000)
-        await page.click(EMAIL_SEL)
-        await page.fill(EMAIL_SEL, config["email"])
+        email_field = page.get_by_placeholder("Email address")
+        await email_field.wait_for(state="visible", timeout=15000)
+        await email_field.click()
+        await email_field.fill(config["email"])
 
         log.info("[Catawiki] パスワードを入力中...")
-        await page.wait_for_selector(PASS_SEL, timeout=10000)
-        await page.fill(PASS_SEL, config["password"])
+        pass_field = page.get_by_placeholder("Password")
+        await pass_field.wait_for(state="visible", timeout=10000)
+        await pass_field.click()
+        await pass_field.fill(config["password"])
 
         log.info("[Catawiki] ログインボタンをクリック...")
-        await page.click(SUBMIT_SEL, timeout=10000)
+        await page.get_by_role("button", name="Sign in").click()
         await page.wait_for_load_state("networkidle", timeout=30000)
     except Exception as e:
         await page.screenshot(path="debug_login_failed.png")
