@@ -1,0 +1,8 @@
+{
+  "email": "Enter your Catawiki email here",
+  "anthropic_api_key": "Enter your Anthropic API key here (starts with sk-ant-)",
+  "line_token": "Enter your LINE Channel Access Token here",
+  "line_user_id": "Enter your LINE User ID here (starts with U)",
+  "ngrok_auth_token": "Enter your ngrok auth token here",
+  "ngrok_domain": "Enter your ngrok static domain here (e.g. your-name.ngrok-free.app)"
+}

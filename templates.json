@@ -1,0 +1,50 @@
+{
+  "faq": [
+    {
+      "keywords_en": ["when", "ship", "send", "dispatch", "posted", "post"],
+      "keywords_nl": ["wanneer", "verzend", "stuur", "verstuur", "verzonden", "verstuurd"],
+      "reply_en": "Thank you for your message! I ship within 2-3 business days after payment confirmation. You will receive your DHL tracking number as soon as your watch has been dispatched. Thank you for your patience!",
+      "reply_nl": "Bedankt voor uw bericht! Ik verzend binnen 2-3 werkdagen na betalingsbevestiging. U ontvangt uw DHL-trackingnummer zodra uw horloge is verzonden. Bedankt voor uw geduld!"
+    },
+    {
+      "keywords_en": ["tracking", "track", "number", "follow"],
+      "keywords_nl": ["tracking", "volg", "nummer", "trackingnummer"],
+      "reply_en": "Your tracking number will be sent to you as soon as your watch has been shipped. You can then track your package directly on the DHL website. I will send it to you as soon as possible!",
+      "reply_nl": "Uw trackingnummer wordt u toegestuurd zodra uw horloge is verzonden. U kunt uw pakket dan volgen op de DHL-website. Ik stuur het u zo snel mogelijk!"
+    },
+    {
+      "keywords_en": ["delivery", "how long", "arrive", "receive", "days", "week"],
+      "keywords_nl": ["levering", "hoe lang", "aankomen", "ontvangen", "dagen", "week"],
+      "reply_en": "Delivery within Europe typically takes 3-7 business days via DHL after dispatch. The exact delivery time depends on your location. You will receive a tracking number so you can follow your package.",
+      "reply_nl": "Levering binnen Europa duurt doorgaans 3-7 werkdagen via DHL na verzending. De exacte levertijd is afhankelijk van uw locatie. U ontvangt een trackingnummer zodat u uw pakket kunt volgen."
+    },
+    {
+      "keywords_en": ["material", "wood", "wooden", "made of", "hardwood"],
+      "keywords_nl": ["materiaal", "hout", "houten", "gemaakt van", "hardhout"],
+      "reply_en": "Our watches are handcrafted from genuine hardwood. Each piece is unique due to the natural grain of the wood. The case and strap are made from sustainably sourced hardwood, making every watch one-of-a-kind.",
+      "reply_nl": "Onze horloges zijn handgemaakt van echt hardhout. Elk stuk is uniek vanwege de natuurlijke nerf van het hout. De kast en band zijn gemaakt van duurzaam gekapt hardhout, waardoor elk horloge uniek is."
+    },
+    {
+      "keywords_en": ["waterproof", "water", "resistant", "swimming", "rain"],
+      "keywords_nl": ["waterbestendig", "water", "zwemmen", "regen", "bestendig"],
+      "reply_en": "The watch has a water resistance of 3 ATM, which means it can handle splashes and light rain, but it is not suitable for swimming or diving. We recommend removing it before washing hands or showering.",
+      "reply_nl": "Het horloge heeft een waterbestendigheid van 3 ATM, wat betekent dat het spatwater en lichte regen aankan, maar niet geschikt is voor zwemmen of duiken. We raden aan het af te doen bij het handen wassen of douchen."
+    },
+    {
+      "keywords_en": ["size", "dimension", "diameter", "thickness", "weight"],
+      "keywords_nl": ["maat", "afmeting", "diameter", "dikte", "gewicht"],
+      "reply_en": "The watch has a case diameter of approximately 42mm and a thickness of 12mm. The strap width is 22mm. The weight is kept light due to the natural wood material. Please feel free to ask if you need any other measurements!",
+      "reply_nl": "Het horloge heeft een kastdiameter van ongeveer 42mm en een dikte van 12mm. De bandmaat is 22mm. Het gewicht is licht gehouden dankzij het natuurlijke houtmateriaal. Vraag gerust als u andere afmetingen nodig heeft!"
+    },
+    {
+      "keywords_en": ["return", "refund", "exchange", "problem", "issue", "broken", "damaged"],
+      "keywords_nl": ["retour", "terugbetaling", "ruilen", "probleem", "kapot", "beschadigd"],
+      "reply_en": "I'm sorry to hear you have an issue! Please send me photos of the problem and I will do my best to resolve it quickly. Customer satisfaction is very important to me and I will find a solution together with you.",
+      "reply_nl": "Het spijt me te horen dat u een probleem heeft! Stuur mij foto's van het probleem en ik doe mijn best om het snel op te lossen. Klanttevredenheid is zeer belangrijk voor mij en ik zal samen met u een oplossing vinden."
+    }
+  ],
+  "shipping": {
+    "en": "Great news — your wooden watch has been shipped and is on its way to you!\n\nShipping details:\n- Carrier: DHL\n- Tracking number: {tracking_number}\n- Track your package: https://www.dhl.com/en/express/tracking.html?AWB={tracking_number}\n\nEstimated delivery: 3-7 business days\n\nThank you so much for your purchase. I hope you love your new watch! Please don't hesitate to reach out if you have any questions.",
+    "nl": "Goed nieuws — uw houten horloge is verzonden en is onderweg naar u!\n\nVerzendgegevens:\n- Vervoerder: DHL\n- Trackingnummer: {tracking_number}\n- Volg uw pakket: https://www.dhl.com/nl/express/tracking.html?AWB={tracking_number}\n\nVerwachte levering: 3-7 werkdagen\n\nHartelijk dank voor uw aankoop. Ik hoop dat u geniet van uw nieuwe horloge! Aarzel niet om contact op te nemen als u vragen heeft."
+  }
+}
