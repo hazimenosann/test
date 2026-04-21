@@ -1,0 +1,27 @@
+# OAuth credentials - NEVER commit
+credentials.json
+token.json
+
+# Downloaded receipts - may contain sensitive financial data
+receipts/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

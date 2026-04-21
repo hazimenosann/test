@@ -1,0 +1,11 @@
+google-auth>=2.22.0
+google-auth-oauthlib>=1.1.0
+google-auth-httplib2>=0.1.1
+google-api-python-client>=2.97.0
+anthropic>=0.25.0
+weasyprint>=60.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.3
+Pillow>=10.0.0
+python-dateutil>=2.8.2
+charset-normalizer>=3.0.0
